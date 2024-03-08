@@ -8,13 +8,11 @@ extern crate rand;
 
 use std::collections::VecDeque;
 use rand::{Rng};
-
 use piston::{ PressEvent, UpdateEvent };
 use piston_window::{ WindowSettings };
 use piston::input::{ Button, RenderEvent };
 use piston::event_loop::{ Events, EventSettings };
 use piston::input::keyboard::Key;
-
 use graphics::*;
 use opengl_graphics::{ GlGraphics, OpenGL };
 use glutin_window::GlutinWindow;
@@ -24,7 +22,6 @@ const BOARD_WIDTH: i8 = 25;
 const BOARD_HEIGHT: i8 = 25;
 const TILE_SIZE: i8 = 25;
 const UPDATE_TIME: f64 = 0.1;
-
 const SNAKE_COLOR: &str = "0000ff";
 const COIN_COLOR: &str = "ff0000";
 const BG_COLOR: &str = "ffffff";
@@ -39,6 +36,7 @@ enum State {
 
 #[derive(PartialEq, Copy, Clone)]
 struct Point { x: i8, y: i8 }
+
 
 struct Snake {
     tail: VecDeque<Point>,
@@ -117,7 +115,6 @@ impl Snake {
             g.score += 1;
             let pos = *g.snake.tail.front().unwrap();
             g.snake.tail.push_back(pos);
-            // g.update_time -= 0.001;
             g.coin = Coin::new(Coin::gen_pos(g));
         }
 
@@ -188,6 +185,7 @@ impl Coin {
     }
 }
 
+
 struct Game {
     snake: Snake,
     time: f64,
@@ -203,7 +201,7 @@ impl Game {
         s.push_back(Point{x: 2, y: 3});
         s.push_back(Point{x: 2, y: 2});
         s.push_back(Point{x: 2, y: 1});
-
+        
         Game {
             snake: Snake::new(s, Key::Down),
             time: UPDATE_TIME,
@@ -266,7 +264,7 @@ impl Game {
 fn main() {
     let mut window: GlutinWindow = WindowSettings::new("Snake Game",
         [BOARD_WIDTH as u32 * TILE_SIZE as u32, BOARD_HEIGHT as u32 * TILE_SIZE as u32])
-        .exit_on_esc(true).build().expect("!!Hopa");
+        .exit_on_esc(true).build().expect("window failed");
     let mut gfx = GlGraphics::new(OpenGL::V3_2);
 
     let mut game = Game::new();
