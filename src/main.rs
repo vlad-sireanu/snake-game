@@ -23,8 +23,9 @@ const BOARD_HEIGHT: i8 = 25;
 const TILE_SIZE: i8 = 25;
 const UPDATE_TIME: f64 = 0.1;
 const SNAKE_COLOR: &str = "0000ff";
-const COIN_COLOR: &str = "ff0000";
-const BG_COLOR: &str = "ffffff";
+const FOOD_COLOR: &str = "ff0000";
+const BG_COLOR: &str = "00ff00";
+const ROCK_COLOR: &str = "000000";
 
 
 #[derive(PartialEq, Copy, Clone)]
@@ -65,8 +66,7 @@ impl Snake {
                         TILE_SIZE as f64 - 2.0 + (prev.x < p.x || prev.x > p.x) as i8 as f64 * 2.0,
                         TILE_SIZE as f64 - 2.0 + (prev.y < p.y || prev.y > p.y) as i8 as f64 * 2.0,
                     ),
-                    t.abs_transform(),
-                    b
+                    t.abs_transform(), b
                 );
                 prev = p;
             }
@@ -76,7 +76,7 @@ impl Snake {
     fn key_press(&mut self, k: Key) {
         use piston::input::keyboard::Key::*;
         match k {
-            Right | Down | Left | Up if Self::reverse_direction(k) != self.last_pressed => {
+            Right | Down | Left | Up if Self::opposite_direction(k) != self.last_pressed => {
                 self.keys.push_back(k);
                 self.last_pressed = k;
             },
@@ -105,17 +105,18 @@ impl Snake {
             y: g.snake.tail.front().unwrap().y + dxy.y,
         };
 
-        if Self::outside(pos) || g.snake.collides(pos) {
-            g.state = State::GameOver;
-            println!(" - Game Over - \nScore: {}\n", g.score);
-            return;
-        }
-
-        if g.coin.pos == pos {
+        if g.food.pos == pos {
             g.score += 1;
             let pos = *g.snake.tail.front().unwrap();
             g.snake.tail.push_back(pos);
-            g.coin = Coin::new(Coin::gen_pos(g));
+            g.food = Food::new(Food::gen_pos(g));
+            g.rocks.push(Rock::new(Rock::gen_pos(g)));
+        }
+
+        if Self::outside(pos) || g.collides(pos) {
+            g.state = State::GameOver;
+            println!("You died!\nScore: {}\n", g.score);
+            return;
         }
 
         g.snake.tail.pop_back();
@@ -126,7 +127,7 @@ impl Snake {
         self.tail.iter().any(|t| *t == pos)
     }
 
-    fn reverse_direction(key: Key) -> Key {
+    fn opposite_direction(key: Key) -> Key {
         use piston::input::keyboard::Key::*;
         match key {
             Right => Left,
@@ -143,13 +144,13 @@ impl Snake {
 }
 
 
-struct Coin {
+struct Food {
     pos: Point,
 }
 
-impl Coin {
-    fn new(pos: Point) -> Coin {
-        Coin {
+impl Food {
+    fn new(pos: Point) -> Food {
+        Food {
             pos: pos,
         }
     }
@@ -162,7 +163,7 @@ impl Coin {
                 y: rng.gen_range(0..BOARD_HEIGHT),
             };
 
-            if !g.snake.tail.iter().any(|t| *t == pos) {
+            if !g.collides(pos) {
                 return pos;
             }
         }
@@ -171,15 +172,54 @@ impl Coin {
     fn render(&self, t: Viewport, gfx: &mut GlGraphics) {
         gfx.draw(t, |_a, b| {
             rectangle(
-                color::hex(COIN_COLOR),
-                (
+                color::hex(FOOD_COLOR),
+                rectangle::square(
                     self.pos.x as f64 * TILE_SIZE as f64 + 1.0,
                     self.pos.y as f64 * TILE_SIZE as f64 + 1.0,
                     TILE_SIZE as f64 - 2.0,
+                ),
+                t.abs_transform(), b
+            );
+        });
+    }
+}
+
+
+struct Rock {
+    pos: Point,
+}
+
+impl Rock {
+    fn new(pos: Point) -> Rock {
+        Rock {
+            pos: pos,
+        }
+    }
+
+    fn gen_pos(g: &Game) -> Point {
+        loop {
+            let mut rng = rand::thread_rng();
+            let pos = Point {
+                x: rng.gen_range(0..BOARD_WIDTH),
+                y: rng.gen_range(0..BOARD_HEIGHT),
+            };
+
+            if !g.collides(pos) {
+                return pos;
+            }
+        }
+    }
+
+    fn render(&self, t: Viewport, gfx: &mut GlGraphics) {
+        gfx.draw(t, |_a, b| {
+            rectangle(
+                color::hex(ROCK_COLOR),
+                rectangle::square(
+                    self.pos.x as f64 * TILE_SIZE as f64 + 1.0,
+                    self.pos.y as f64 * TILE_SIZE as f64 + 1.0,
                     TILE_SIZE as f64 - 2.0,
                 ),
-                t.abs_transform(),
-                b
+                t.abs_transform(), b
             );
         });
     }
@@ -191,8 +231,9 @@ struct Game {
     time: f64,
     update_time: f64,
     state: State,
-    coin: Coin,
+    food: Food,
     score: u32,
+    rocks: Vec<Rock>,
 }
 
 impl Game {
@@ -208,13 +249,17 @@ impl Game {
             update_time: UPDATE_TIME,
             state: State::Playing,
             score: 0,
-            coin: Coin::new(Point{x: 5, y: 5}),
+            food: Food::new(Point{x: 5, y: 5}),
+            rocks: Vec::<Rock>::new(),
         }
     }
 
     fn render(&mut self, t: Viewport, gfx: &mut GlGraphics) {
         clear(color::hex(BG_COLOR), gfx);
-        self.coin.render(t, gfx);
+        self.food.render(t, gfx);
+        for rock in self.rocks.iter() {
+            rock.render(t, gfx);
+        }
         self.snake.render(t, gfx);
     }
 
@@ -245,7 +290,8 @@ impl Game {
                 self.update_time = UPDATE_TIME;
                 self.state = State::Playing;
                 self.score = 0;
-                self.coin = Coin::new(Coin::gen_pos(self));
+                self.food = Food::new(Food::gen_pos(self));
+                self.rocks = Vec::<Rock>::new();
             },
             (Key::P, State::Playing) => {
                 self.state = State::Paused;
@@ -257,6 +303,10 @@ impl Game {
                 self.snake.key_press(key);
             }
         };
+    }
+
+    fn collides(&self, pos: Point) -> bool {
+        self.rocks.iter().any(|w| w.pos == pos) || self.snake.collides(pos) || self.food.pos == pos
     }
 }
 
