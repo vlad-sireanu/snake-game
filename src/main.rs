@@ -8,24 +8,24 @@ extern crate rand;
 
 use std::collections::VecDeque;
 use rand::{Rng};
-use piston::{ PressEvent, UpdateEvent };
-use piston_window::{ WindowSettings };
-use piston::input::{ Button, RenderEvent };
-use piston::event_loop::{ Events, EventSettings };
+use piston::{PressEvent, UpdateEvent};
+use piston_window::{WindowSettings};
+use piston::input::{Button, RenderEvent};
+use piston::event_loop::{Events, EventSettings};
 use piston::input::keyboard::Key;
 use graphics::*;
-use opengl_graphics::{ GlGraphics, OpenGL };
+use opengl_graphics::{GlGraphics, OpenGL};
 use glutin_window::GlutinWindow;
 
 
-const BOARD_WIDTH: i8 = 25;
-const BOARD_HEIGHT: i8 = 25;
+const BOARD_WIDTH: i8 = 20;
+const BOARD_HEIGHT: i8 = 20;
 const TILE_SIZE: i8 = 25;
-const UPDATE_TIME: f64 = 0.1;
-const SNAKE_COLOR: &str = "0000ff";
+const MARGIN_SIZE: i8 = 5;
+const UPDATE_TIME: f64 = 0.15;
+const SNAKE_COLOR: &str = "00ff00";
 const FOOD_COLOR: &str = "ff0000";
-const BG_COLOR: &str = "00ff00";
-const ROCK_COLOR: &str = "000000";
+const BG_COLOR: &str = "7777aa";
 
 
 #[derive(PartialEq, Copy, Clone)]
@@ -61,10 +61,10 @@ impl Snake {
                 rectangle(
                     color::hex(SNAKE_COLOR), 
                     (
-                        p.x as f64 * TILE_SIZE as f64 + 1.0 - (prev.x < p.x) as i8 as f64 * 2.0,
-                        p.y as f64 * TILE_SIZE as f64 + 1.0 - (prev.y < p.y) as i8 as f64 * 2.0,
-                        TILE_SIZE as f64 - 2.0 + (prev.x < p.x || prev.x > p.x) as i8 as f64 * 2.0,
-                        TILE_SIZE as f64 - 2.0 + (prev.y < p.y || prev.y > p.y) as i8 as f64 * 2.0,
+                        p.x as f64 * TILE_SIZE as f64 + MARGIN_SIZE as f64 * (1.0 - (prev.x < p.x) as i8 as f64 * 2.0),
+                        p.y as f64 * TILE_SIZE as f64 + MARGIN_SIZE as f64 * (1.0 - (prev.y < p.y) as i8 as f64 * 2.0),
+                        TILE_SIZE as f64 + MARGIN_SIZE as f64 * (-2.0 + (prev.x < p.x || prev.x > p.x) as i8 as f64 * 2.0),
+                        TILE_SIZE as f64 + MARGIN_SIZE as f64 * (-2.0 + (prev.y < p.y || prev.y > p.y) as i8 as f64 * 2.0),
                     ),
                     t.abs_transform(), b
                 );
@@ -110,10 +110,9 @@ impl Snake {
             let pos = *g.snake.tail.front().unwrap();
             g.snake.tail.push_back(pos);
             g.food = Food::new(Food::gen_pos(g));
-            g.rocks.push(Rock::new(Rock::gen_pos(g)));
         }
 
-        if Self::outside(pos) || g.collides(pos) {
+        if Self::outside(pos) || g.snake.collides(pos) {
             g.state = State::GameOver;
             println!("You died!\nScore: {}\n", g.score);
             return;
@@ -163,7 +162,7 @@ impl Food {
                 y: rng.gen_range(0..BOARD_HEIGHT),
             };
 
-            if !g.collides(pos) {
+            if !g.snake.collides(pos) {
                 return pos;
             }
         }
@@ -174,50 +173,9 @@ impl Food {
             rectangle(
                 color::hex(FOOD_COLOR),
                 rectangle::square(
-                    self.pos.x as f64 * TILE_SIZE as f64 + 1.0,
-                    self.pos.y as f64 * TILE_SIZE as f64 + 1.0,
-                    TILE_SIZE as f64 - 2.0,
-                ),
-                t.abs_transform(), b
-            );
-        });
-    }
-}
-
-
-struct Rock {
-    pos: Point,
-}
-
-impl Rock {
-    fn new(pos: Point) -> Rock {
-        Rock {
-            pos: pos,
-        }
-    }
-
-    fn gen_pos(g: &Game) -> Point {
-        loop {
-            let mut rng = rand::thread_rng();
-            let pos = Point {
-                x: rng.gen_range(0..BOARD_WIDTH),
-                y: rng.gen_range(0..BOARD_HEIGHT),
-            };
-
-            if !g.collides(pos) {
-                return pos;
-            }
-        }
-    }
-
-    fn render(&self, t: Viewport, gfx: &mut GlGraphics) {
-        gfx.draw(t, |_a, b| {
-            rectangle(
-                color::hex(ROCK_COLOR),
-                rectangle::square(
-                    self.pos.x as f64 * TILE_SIZE as f64 + 1.0,
-                    self.pos.y as f64 * TILE_SIZE as f64 + 1.0,
-                    TILE_SIZE as f64 - 2.0,
+                    self.pos.x as f64 * TILE_SIZE as f64 + MARGIN_SIZE as f64,
+                    self.pos.y as f64 * TILE_SIZE as f64 + MARGIN_SIZE as f64,
+                    TILE_SIZE as f64 - 2.0 * MARGIN_SIZE as f64,
                 ),
                 t.abs_transform(), b
             );
@@ -233,7 +191,6 @@ struct Game {
     state: State,
     food: Food,
     score: u32,
-    rocks: Vec<Rock>,
 }
 
 impl Game {
@@ -250,16 +207,12 @@ impl Game {
             state: State::Playing,
             score: 0,
             food: Food::new(Point{x: 5, y: 5}),
-            rocks: Vec::<Rock>::new(),
         }
     }
 
     fn render(&mut self, t: Viewport, gfx: &mut GlGraphics) {
         clear(color::hex(BG_COLOR), gfx);
         self.food.render(t, gfx);
-        for rock in self.rocks.iter() {
-            rock.render(t, gfx);
-        }
         self.snake.render(t, gfx);
     }
 
@@ -291,7 +244,6 @@ impl Game {
                 self.state = State::Playing;
                 self.score = 0;
                 self.food = Food::new(Food::gen_pos(self));
-                self.rocks = Vec::<Rock>::new();
             },
             (Key::P, State::Playing) => {
                 self.state = State::Paused;
@@ -304,10 +256,6 @@ impl Game {
             }
         };
     }
-
-    fn collides(&self, pos: Point) -> bool {
-        self.rocks.iter().any(|w| w.pos == pos) || self.snake.collides(pos) || self.food.pos == pos
-    }
 }
 
 
@@ -316,10 +264,8 @@ fn main() {
         [BOARD_WIDTH as u32 * TILE_SIZE as u32, BOARD_HEIGHT as u32 * TILE_SIZE as u32])
         .exit_on_esc(true).build().expect("window failed");
     let mut gfx = GlGraphics::new(OpenGL::V3_2);
-
+    let mut events = Events::new(EventSettings::new());
     let mut game = Game::new();
-    let event_settings = EventSettings::new();
-    let mut events = Events::new(event_settings);
 
     while let Some(e) = events.next(&mut window) {
         if let Some(args) = e.render_args() {
