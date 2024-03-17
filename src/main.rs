@@ -20,12 +20,15 @@ use glutin_window::GlutinWindow;
 
 const BOARD_WIDTH: i8 = 16;
 const BOARD_HEIGHT: i8 = 16;
-const TILE_SIZE: i8 = 29;
+const TILE_SIZE: i8 = 34;
 const MARGIN_SIZE: i8 = 4;
 const UPDATE_TIME: f64 = 0.15;
 const SNAKE_COLOR: &str = "00ff00";
 const FOOD_COLOR: &str = "ff0000";
 const BG_COLOR: &str = "7777aa";
+
+const INITIAL_SNAKE: [Point; 3] = [Point{x: 2, y: 1}, Point{x: 2, y: 0}, Point{x: 2, y: -1}];
+const INITIAL_FOOD: Point = Point{x: 3, y: 3};
 
 
 #[derive(PartialEq, Copy, Clone)]
@@ -105,6 +108,7 @@ impl Snake {
             y: g.snake.tail.front().unwrap().y + dxy.y,
         };
 
+
         if Self::outside(pos) || g.snake.collides(pos) {
             g.state = State::GameOver;
             println!("You died!\nScore: {}\n", g.score);
@@ -115,6 +119,12 @@ impl Snake {
 
         if g.food.pos == pos {
             g.score += 1;
+            if g.score == BOARD_WIDTH as u32 * BOARD_HEIGHT as u32 {
+                g.state = State::GameOver;
+                println!("You won!\nScore: {}\n", g.score);
+                return;
+            }
+
             g.food = Food::new(Food::gen_pos(g));
             return;
         }
@@ -194,26 +204,21 @@ struct Game {
 }
 
 impl Game {
-    fn new() -> Game {
-        let mut s = VecDeque::new();
-        s.push_back(Point{x: 2, y: 3});
-        s.push_back(Point{x: 2, y: 2});
-        s.push_back(Point{x: 2, y: 1});
-        
+    fn new() -> Game {      
         Game {
-            snake: Snake::new(s, Key::Down),
+            snake: Snake::new(VecDeque::from(INITIAL_SNAKE), Key::Down),
             time: UPDATE_TIME,
             update_time: UPDATE_TIME,
             state: State::Playing,
-            score: 0,
-            food: Food::new(Point{x: 5, y: 5}),
+            score: INITIAL_SNAKE.len() as u32,
+            food: Food::new(INITIAL_FOOD),
         }
     }
 
     fn render(&mut self, t: Viewport, gfx: &mut GlGraphics) {
         clear(color::hex(BG_COLOR), gfx);
-        self.snake.render(t, gfx);
         self.food.render(t, gfx);
+        self.snake.render(t, gfx);
     }
 
     fn update(&mut self, dt: f64) {
@@ -233,16 +238,12 @@ impl Game {
     fn key_press(&mut self, key: Key) {
         match (key, self.state) {
             (Key::R, _) => {
-                let mut s = VecDeque::new();
-                s.push_back(Point{x: 2, y: 3});
-                s.push_back(Point{x: 2, y: 2});
-                s.push_back(Point{x: 2, y: 1});
-                self.snake = Snake::new(s, Key::Down);
+                self.snake = Snake::new(VecDeque::from(INITIAL_SNAKE), Key::Down);
                 self.state = State::Playing;
                 self.time = UPDATE_TIME;
                 self.update_time = UPDATE_TIME;
                 self.state = State::Playing;
-                self.score = 0;
+                self.score = INITIAL_SNAKE.len() as u32;
                 self.food = Food::new(Food::gen_pos(self));
             },
             (Key::P, State::Playing) => {
