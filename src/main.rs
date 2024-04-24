@@ -1,10 +1,3 @@
-extern crate glutin_window;
-extern crate graphics;
-extern crate opengl_graphics;
-extern crate piston;
-extern crate piston_window;
-extern crate rand;
-
 use glutin_window::GlutinWindow;
 use graphics::*;
 use opengl_graphics::{GlGraphics, OpenGL};
@@ -16,10 +9,11 @@ use piston_window::WindowSettings;
 use rand::Rng;
 use std::collections::VecDeque;
 
-const BOARD_WIDTH: i8 = 12;
-const BOARD_HEIGHT: i8 = 12;
-const TILE_SIZE: i8 = 34;
-const MARGIN_SIZE: i8 = 7;
+const BOARD_WIDTH: i16 = 20;
+const BOARD_HEIGHT: i16 = 12;
+const TILE_SIZE: i16 = 34;
+const MARGIN_SIZE: i16 = 7;
+const MAX_FOOD_COUNT: i16 = 6;
 const UPDATE_TIME: f64 = 0.15;
 const SNAKE_COLOR: &str = "4444ff";
 const FOOD_COLOR: &str = "ff0055";
@@ -31,7 +25,6 @@ const INITIAL_SNAKE: [Point; 3] = [
     Point { x: 2, y: 0 },
     Point { x: 2, y: -1 },
 ];
-const INITIAL_FOOD: Point = Point { x: 3, y: 3 };
 
 #[derive(PartialEq, Copy, Clone)]
 enum State {
@@ -42,8 +35,8 @@ enum State {
 
 #[derive(PartialEq, Copy, Clone)]
 struct Point {
-    x: i8,
-    y: i8,
+    x: i16,
+    y: i16,
 }
 
 struct Snake {
@@ -131,16 +124,22 @@ impl Snake {
 
         g.snake.tail.push_front(pos);
 
-        if g.food.pos == pos {
-            g.score += 1;
-            if g.score == BOARD_WIDTH as u32 * BOARD_HEIGHT as u32 {
-                g.state = State::GameOver;
-                println!("You won!\nScore: {}\n", g.score);
+        for (index, food) in g.foods.iter().enumerate() {
+            if food.pos == pos {
+                g.foods.swap_remove(index);
+                g.score += 1;
+
+                if g.score == BOARD_WIDTH * BOARD_HEIGHT {
+                    g.state = State::GameOver;
+                    println!("You won!\nScore: {}\n", g.score);
+                    return;
+                }
+
+                if g.foods.len() == 0 {
+                    Food::gen_foods(g);
+                }
                 return;
             }
-
-            g.food = Food::new(Food::gen_pos(g));
-            return;
         }
 
         g.snake.tail.pop_back();
@@ -166,16 +165,13 @@ impl Snake {
     }
 }
 
+#[derive(Clone)]
 struct Food {
     pos: Point,
 }
 
 impl Food {
-    fn new(pos: Point) -> Food {
-        Food { pos: pos }
-    }
-
-    fn gen_pos(g: &Game) -> Point {
+    fn new(g: &Game) -> Self {
         loop {
             let mut rng = rand::thread_rng();
             let pos = Point {
@@ -183,9 +179,19 @@ impl Food {
                 y: rng.gen_range(0..BOARD_HEIGHT),
             };
 
-            if !g.snake.collides(pos) {
-                return pos;
+            if !g.collides(pos) {
+                return Self { pos: pos };
             }
+        }
+    }
+
+    fn gen_foods(g: &mut Game) {
+        let mut rng = rand::thread_rng();
+        let food_count =
+            rng.gen_range(1..=MAX_FOOD_COUNT.min(BOARD_WIDTH * BOARD_HEIGHT - g.score));
+        g.foods = Vec::with_capacity(food_count as usize);
+        for _i in 0..food_count {
+            g.foods.push(Food::new(g));
         }
     }
 
@@ -210,35 +216,37 @@ struct Game {
     time: f64,
     update_time: f64,
     state: State,
-    food: Food,
-    score: u32,
+    foods: Vec<Food>,
+    score: i16,
 }
 
 impl Game {
     fn new() -> Game {
-        Game {
+        let mut g = Game {
             snake: Snake::new(VecDeque::from(INITIAL_SNAKE), Key::Down),
             time: UPDATE_TIME,
             update_time: UPDATE_TIME,
             state: State::Playing,
-            score: INITIAL_SNAKE.len() as u32,
-            food: Food::new(INITIAL_FOOD),
-        }
+            score: INITIAL_SNAKE.len() as i16,
+            foods: Vec::new(),
+        };
+        Food::gen_foods(&mut g);
+        g
     }
 
     fn draw_board(t: Viewport, gfx: &mut GlGraphics) {
         gfx.draw(t, |_a, b| {
-            for i in 0..BOARD_HEIGHT {
-                for j in 0..BOARD_WIDTH {
+            for x in 0..BOARD_WIDTH {
+                for y in 0..BOARD_HEIGHT {
                     rectangle(
-                        if (i + j) % 2 == 0 {
+                        if (x + y) % 2 == 0 {
                             color::hex(BG_COLOR_EVEN)
                         } else {
                             color::hex(BG_COLOR_ODD)
                         },
                         (
-                            i as f64 * TILE_SIZE as f64,
-                            j as f64 * TILE_SIZE as f64,
+                            x as f64 * TILE_SIZE as f64,
+                            y as f64 * TILE_SIZE as f64,
                             TILE_SIZE as f64,
                             TILE_SIZE as f64,
                         ),
@@ -251,10 +259,12 @@ impl Game {
     }
 
     fn render(&mut self, t: Viewport, gfx: &mut GlGraphics) {
-        // clear(color::hex(BG_COLOR), gfx);
         Self::draw_board(t, gfx);
-        self.food.render(t, gfx);
         self.snake.render(t, gfx);
+
+        for food in self.foods.iter() {
+            food.render(t, gfx);
+        }
     }
 
     fn update(&mut self, dt: f64) {
@@ -279,8 +289,8 @@ impl Game {
                 self.time = UPDATE_TIME;
                 self.update_time = UPDATE_TIME;
                 self.state = State::Playing;
-                self.score = INITIAL_SNAKE.len() as u32;
-                self.food = Food::new(Food::gen_pos(self));
+                self.score = INITIAL_SNAKE.len() as i16;
+                Food::gen_foods(self);
             }
             (Key::P, State::Playing) => {
                 self.state = State::Paused;
@@ -292,6 +302,10 @@ impl Game {
                 self.snake.key_press(key);
             }
         };
+    }
+
+    fn collides(&self, pos: Point) -> bool {
+        self.snake.collides(pos) || self.foods.iter().any(|p| p.pos == pos)
     }
 }
 
