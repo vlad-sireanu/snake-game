@@ -1,11 +1,4 @@
-use crate::food::Food;
-use crate::game::Game;
-
 use crate::*;
-use graphics::*;
-use opengl_graphics::GlGraphics;
-use piston::input::keyboard::Key;
-use std::collections::VecDeque;
 
 pub struct Snake {
     pub tail: VecDeque<Point>,
@@ -29,15 +22,13 @@ impl Snake {
                     color::hex(SNAKE_COLOR),
                     (
                         p.x as f64 * TILE_SIZE as f64
-                            + MARGIN_SIZE as f64 * (1.0 - (prev.x < p.x) as i8 as f64 * 2.0),
+                            + if prev.x < p.x { -1.0 } else { 1.0 } * MARGIN_SIZE as f64,
                         p.y as f64 * TILE_SIZE as f64
-                            + MARGIN_SIZE as f64 * (1.0 - (prev.y < p.y) as i8 as f64 * 2.0),
+                            + if prev.y < p.y { -1.0 } else { 1.0 } * MARGIN_SIZE as f64,
                         TILE_SIZE as f64
-                            + MARGIN_SIZE as f64
-                                * (-2.0 + (prev.x < p.x || prev.x > p.x) as i8 as f64 * 2.0),
+                            + if prev.x != p.x { 0.0 } else { -2.0 } * MARGIN_SIZE as f64,
                         TILE_SIZE as f64
-                            + MARGIN_SIZE as f64
-                                * (-2.0 + (prev.y < p.y || prev.y > p.y) as i8 as f64 * 2.0),
+                            + if prev.y != p.y { 0.0 } else { -2.0 } * MARGIN_SIZE as f64,
                     ),
                     t.abs_transform(),
                     b,
@@ -47,21 +38,18 @@ impl Snake {
         });
     }
     pub fn key_press(&mut self, k: Key) {
-        use piston::input::keyboard::Key::*;
-        match k {
-            Right | Down | Left | Up if Self::opposite_direction(k) != self.last_pressed => {
-                self.keys.push_back(k);
-                self.last_pressed = k;
-            }
-            _ => {}
-        };
+        if Self::opposite_direction(k) != self.last_pressed {
+            self.keys.push_back(k);
+            self.last_pressed = k;
+        }
     }
     pub fn update(g: &mut Game) {
         use piston::input::keyboard::Key::*;
-        if g.snake.keys.is_empty() {
-            g.snake.keys.push_back(g.snake.last_pressed);
-        }
-        let k = g.snake.keys.pop_front().unwrap();
+        let k = if g.snake.keys.is_empty() {
+            g.snake.last_pressed
+        } else {
+            g.snake.keys.pop_front().unwrap()
+        };
         Snake::mv(
             g,
             match k {
@@ -74,21 +62,17 @@ impl Snake {
         )
     }
     fn mv(g: &mut Game, dxy: Point) {
-        let pos = Point {
-            x: g.snake.tail.front().unwrap().x + dxy.x,
-            y: g.snake.tail.front().unwrap().y + dxy.y,
-        };
+        let pos = *g.snake.tail.front().unwrap() + dxy;
 
         g.snake.tail.push_front(pos);
 
         for (index, food) in g.foods.iter().enumerate() {
             if food.pos == pos {
                 g.foods.swap_remove(index);
-                g.score += 1;
 
-                if g.score == BOARD_WIDTH * BOARD_HEIGHT {
+                if g.snake.tail.len() as i16 == BOARD_WIDTH * BOARD_HEIGHT {
                     g.state = State::GameOver;
-                    println!("You won!\nScore: {}\n", g.score);
+                    println!("You won!\nScore: {}\n", g.snake.tail.len());
                     return;
                 }
 
@@ -101,7 +85,7 @@ impl Snake {
 
         if Self::outside(pos) || !g.free_pos.contains(pos) {
             g.state = State::GameOver;
-            println!("You died!\nScore: {}\n", g.score);
+            println!("You died!\nScore: {}\n", g.snake.tail.len());
             return;
         }
 

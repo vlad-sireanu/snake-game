@@ -6,7 +6,6 @@ pub struct Game {
     update_time: f64,
     pub state: State,
     pub foods: Vec<Food>,
-    pub score: i16,
     pub free_pos: Bijection<Point>,
 }
 
@@ -17,16 +16,15 @@ impl Game {
             time: UPDATE_TIME,
             update_time: UPDATE_TIME,
             state: State::Playing,
-            score: INITIAL_SNAKE.len() as i16,
             foods: Vec::new(),
             free_pos: Bijection::with_capacity(BOARD_WIDTH as usize * BOARD_HEIGHT as usize),
         };
         for x in 0..BOARD_WIDTH {
             for y in 0..BOARD_HEIGHT {
-                g.free_pos.insert(Point { x: x, y: y });
+                g.free_pos.insert(Point { x, y });
             }
         }
-        for pos in g.snake.tail.iter() {
+        for pos in INITIAL_SNAKE.iter() {
             g.free_pos.remove_elem(pos);
         }
         Food::gen_foods(&mut g);
@@ -37,29 +35,26 @@ impl Game {
         self.time = UPDATE_TIME;
         self.update_time = UPDATE_TIME;
         self.state = State::Playing;
-        self.score = INITIAL_SNAKE.len() as i16;
         self.foods = Vec::new();
         self.free_pos = Bijection::with_capacity(BOARD_WIDTH as usize * BOARD_HEIGHT as usize);
         for x in 0..BOARD_WIDTH {
             for y in 0..BOARD_HEIGHT {
-                self.free_pos.insert(Point { x: x, y: y });
+                self.free_pos.insert(Point { x, y });
             }
         }
-        for pos in self.snake.tail.iter() {
+        for pos in INITIAL_SNAKE.iter() {
             self.free_pos.remove_elem(pos);
         }
         Food::gen_foods(self);
     }
     fn draw_board(t: Viewport, gfx: &mut GlGraphics) {
+        gfx.clear_color(color::hex(BG_COLOR_ODD));
+
         gfx.draw(t, |_a, b| {
             for x in 0..BOARD_WIDTH {
-                for y in 0..BOARD_HEIGHT {
+                for y in (x % 2..BOARD_HEIGHT).step_by(2) {
                     rectangle(
-                        if (x + y) % 2 == 0 {
-                            color::hex(BG_COLOR_EVEN)
-                        } else {
-                            color::hex(BG_COLOR_ODD)
-                        },
+                        color::hex(BG_COLOR_EVEN),
                         (
                             x as f64 * TILE_SIZE as f64,
                             y as f64 * TILE_SIZE as f64,
@@ -82,32 +77,27 @@ impl Game {
         }
     }
     pub fn update(&mut self, dt: f64) {
-        match self.state {
-            State::Paused | State::GameOver => return,
-            _ => {}
-        }
+        if self.state == State::Playing {
+            self.time += dt;
 
-        self.time += dt;
-
-        if self.time > self.update_time {
-            self.time -= self.update_time;
-            Snake::update(self);
+            if self.time > self.update_time {
+                self.time -= self.update_time;
+                Snake::update(self);
+            }
         }
     }
     pub fn key_press(&mut self, key: Key) {
-        match (key, self.state) {
-            (Key::R, _) => {
-                self.restart();
+        match key {
+            Key::R => self.restart(),
+            Key::P => {
+                self.state = match self.state {
+                    State::Paused => State::Playing,
+                    State::Playing => State::Paused,
+                    other => other,
+                }
             }
-            (Key::P, State::Playing) => {
-                self.state = State::Paused;
-            }
-            (Key::P, State::Paused) => {
-                self.state = State::Playing;
-            }
-            _ => {
-                self.snake.key_press(key);
-            }
-        };
+            Key::Left | Key::Right | Key::Up | Key::Down => self.snake.key_press(key),
+            _ => {}
+        }
     }
 }

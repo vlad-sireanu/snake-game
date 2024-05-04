@@ -7,9 +7,7 @@ pub struct Food {
 
 impl Food {
     pub fn gen_foods(g: &mut Game) {
-        let mut rng = rand::thread_rng();
-        let food_count =
-            rng.gen_range(1..=MAX_FOOD_COUNT.min(BOARD_WIDTH * BOARD_HEIGHT - g.score));
+        let food_count = thread_rng().gen_range(1..=MAX_FOOD_COUNT.min(g.free_pos.len() as i16));
         g.foods = Vec::with_capacity(food_count as usize);
         for _i in 0..food_count {
             g.foods.push(Food {

@@ -11,7 +11,7 @@ fn main() {
     .exit_on_esc(true)
     .build()
     .expect("window failed");
-    let mut gfx = GlGraphics::new(OpenGL::V3_2);
+    let mut gfx = GlGraphics::new(OpenGL::V4_5);
     let mut events = Events::new(EventSettings::new());
     let mut game = Game::new();
 
